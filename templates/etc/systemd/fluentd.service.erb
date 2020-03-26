@@ -1,0 +1,31 @@
+<% require "shellwords" %>
+[Unit]
+Description=<%= project_name %>: Fluentd agent
+Documentation=https://yourwebsite.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=<%= Shellwords.shellescape(project_name) %>
+Group=<%= Shellwords.shellescape(project_name) %>
+LimitNOFILE=65536
+Environment=LD_PRELOAD=<%= install_path %>/embedded/lib/libjemalloc.so
+Environment=GEM_HOME=<%= install_path %>/embedded/lib/ruby/gems/<%= gem_dir_version %>/
+Environment=GEM_PATH=<%= install_path %>/embedded/lib/ruby/gems/<%= gem_dir_version %>/
+Environment=FLUENT_CONF=/etc/<%= project_name %>/fluent.conf
+Environment=FLUENT_PLUGIN=/etc/<%= project_name %>/plugin
+Environment=FLUENT_SOCKET=/var/run/<%= project_name %>/<%= project_name %>.sock
+Environment=FLUENTD_LOG_FILE=/var/log/<%= project_name %>/<%= project_name %>.log
+Environment=FLUENTD_OPTIONS=
+EnvironmentFile=-/etc/default/<%= project_name %>
+PIDFile=<%= Shellwords.shellescape(File.join(root_path, "var", "run", project_name, "#{project_name}.pid")) %>
+RuntimeDirectory=<%= Shellwords.shellescape(project_name) %>
+Type=forking
+ExecStart=/opt/fluentd/embedded/bin/fluentd --log $FLUENTD_LOG_FILE --daemon <%= Shellwords.shellescape(File.join(root_path, "var", "run", project_name, "#{project_name}.pid")) %> $FLUENTD_OPTIONS
+ExecStop=/bin/kill -TERM ${MAINPID}
+ExecReload=/bin/kill -HUP ${MAINPID}
+Restart=always
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

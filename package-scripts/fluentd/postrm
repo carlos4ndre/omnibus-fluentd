@@ -1,0 +1,38 @@
+#! /bin/sh
+
+set -e
+
+if [ "$1" = "purge" ]; then
+        rm -f /etc/default/fluentd
+        rm -f /etc/fluentd/fluentd.conf
+	dpkg-statoverride --list /etc/fluentd > /dev/null && \
+		dpkg-statoverride --remove /etc/fluentd
+	rm -f /var/run/fluentd/*
+	dpkg-statoverride --list /var/run/fluentd > /dev/null && \
+		dpkg-statoverride --remove /var/run/fluentd
+	rm -rf /var/log/fluentd/buffer
+	rm -rf /var/log/fluentd/*
+	dpkg-statoverride --list /var/log/fluentd > /dev/null && \
+		dpkg-statoverride --remove /var/log/fluentd
+
+    rm /usr/sbin/fluentd
+
+    getent passwd fluentd && userdel -r fluentd
+
+    if [ -f /usr/sbin/fluentd-ui ]; then
+        rm /usr/sbin/fluentd-ui
+    fi
+    if [ -f /usr/bin/td ]; then
+        rm /usr/bin/td
+    fi
+    if [ -f /etc/logrotate.d/fluentd ]; then
+        rm /etc/logrotate.d/fluentd
+    fi
+
+fi
+
+# Automatically added by dh_makeshlibs
+if [ "$1" = "remove" ]; then
+	ldconfig
+fi
+# End automatically added section

@@ -1,0 +1,30 @@
+[Unit]
+Description=fluentd: Fluentd agent
+Documentation=https://yourwebsite.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fluentd
+Group=fluentd
+LimitNOFILE=65536
+Environment=LD_PRELOAD=/opt/fluentd/embedded/lib/libjemalloc.so
+Environment=GEM_HOME=/opt/fluentd/embedded/lib/ruby/gems/2.6.0/
+Environment=GEM_PATH=/opt/fluentd/embedded/lib/ruby/gems/2.6.0/
+Environment=FLUENT_CONF=/etc/fluentd/fluent.conf
+Environment=FLUENT_PLUGIN=/etc/fluentd/plugin
+Environment=FLUENT_SOCKET=/var/run/fluentd/fluentd.sock
+Environment=FLUENTD_LOG_FILE=/var/log/fluentd/fluentd.log
+Environment=FLUENTD_OPTIONS=
+EnvironmentFile=-/etc/default/fluentd
+PIDFile=/var/run/fluentd/fluentd.pid
+RuntimeDirectory=fluentd
+Type=forking
+ExecStart=/opt/fluentd/embedded/bin/fluentd --log $FLUENTD_LOG_FILE --daemon /var/run/fluentd/fluentd.pid $FLUENTD_OPTIONS
+ExecStop=/bin/kill -TERM ${MAINPID}
+ExecReload=/bin/kill -HUP ${MAINPID}
+Restart=always
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

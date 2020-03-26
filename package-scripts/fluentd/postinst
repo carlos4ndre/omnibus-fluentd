@@ -1,0 +1,100 @@
+#! /bin/sh
+
+set -e
+
+fluentd_dir=/opt/fluentd
+prevver="$2"
+
+add_system_user() {
+    if ! getent passwd fluentd >/dev/null; then
+        adduser --group --system --home /var/lib/fluentd fluentd
+    fi
+}
+
+add_directories() {
+    mkdir -p /var/run/fluentd
+    mkdir -p /etc/fluentd
+    mkdir -p /etc/fluentd/plugin
+    mkdir -p /var/log/fluentd
+}
+
+fixperms() {
+    dpkg-statoverride --list /var/run/fluentd >/dev/null || \
+        dpkg-statoverride --update --add fluentd fluentd 0755 /var/run/fluentd
+    dpkg-statoverride --list /etc/fluentd >/dev/null || \
+        dpkg-statoverride --update --add fluentd fluentd 0755 /etc/fluentd
+    dpkg-statoverride --list /var/log/fluentd >/dev/null || \
+        dpkg-statoverride --update --add fluentd fluentd 0755 /var/log/fluentd
+}
+
+update_conffile() {
+    CONFFILE="$1"
+    TMPL="$2"
+
+    if [ -e "$CONFFILE" ]; then
+        md5sum="`md5sum \"$CONFFILE\" | sed -e \"s/ .*//\"`"
+        old_md5sum="`sed -n -e \"/^Conffiles:/,/^[^ ]/{\\\\' $TMPL'{s/.* //;p}}\" /var/lib/dpkg/status`"
+        if [ -z "$old_md5sum" ]; then
+           # backward compatibility
+            old_md5sum="`sed -n -e \"/^Conffiles:/,/^[^ ]/{\\\\' $CONFFILE'{s/.* //;p}}\" /var/lib/dpkg/status`"
+        fi
+
+        if [ "$md5sum" != "$old_md5sum" ]; then
+            echo "Conffile $CONFFILE has been modified. Remain untouched."
+            # do nothing
+        else
+            echo "Updating conffile $CONFFILE ..."
+            cp -f "$TMPL" "$CONFFILE"
+        fi
+    else
+        echo "Installing default conffile $CONFFILE ..."
+        cp -f "$TMPL" "$CONFFILE"
+    fi
+
+    # Fluentd has a bug of loading plugin before
+    # changing to the right user. Then, these directories were created with
+    # root permission. The following lines fix that problem.
+    if [ -d "/var/log/fluentd/buffer/" ]; then
+        chown -R fluentd:fluentd /var/log/fluentd/buffer/
+    fi
+    if [ -d "/tmp/fluentd/" ]; then
+        chown -R fluentd:fluentd /tmp/fluentd/
+    fi
+}
+
+case "$1" in
+    configure)
+        add_system_user
+        add_directories
+        fixperms
+        update_conffile /etc/fluentd/fluent.conf ${fluentd_dir}/etc/fluentd/fluent.conf.tmpl
+        ;;
+    abort-upgrade|abort-deconfigure|abort-remove)
+        :
+        ;;
+    *)
+        echo "Called with unknown argument $1, bailing out."
+        exit 1
+        ;;
+esac
+
+
+cp -f ${fluentd_dir}/usr/sbin/fluentd /usr/sbin/fluentd
+chmod 755 /usr/sbin/fluentd
+
+if [ -d "/etc/logrotate.d/" ]; then
+  cp -f ${fluentd_dir}/etc/fluentd/logrotate.d/fluentd.logrotate /etc/logrotate.d/fluentd
+fi
+
+if [ -d "/lib/systemd/system/" ]; then
+    cp -f ${fluentd_dir}/etc/systemd/fluentd.service /lib/systemd/system/
+    chmod 644 /lib/systemd/system/fluentd.service
+fi
+
+
+# End automatically added section
+# Automatically added by dh_makeshlibs
+if [ "$1" = "configure" ]; then
+	ldconfig
+fi
+# End automatically added section

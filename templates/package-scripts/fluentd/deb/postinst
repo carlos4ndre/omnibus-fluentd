@@ -1,0 +1,106 @@
+#! /bin/sh
+
+set -e
+
+<%= project_name_snake %>_dir=<%= install_path %>
+
+prevver="$2"
+
+add_system_user() {
+    if ! getent passwd <%= project_name %> >/dev/null; then
+        adduser --group --system --home /var/lib/<%= project_name %> <%= project_name %>
+    fi
+}
+
+add_directories() {
+    mkdir -p /var/run/<%= project_name %>
+    mkdir -p /etc/<%= project_name %>
+    mkdir -p /etc/<%= project_name %>/plugin
+    mkdir -p /var/log/<%= project_name %>
+}
+
+fixperms() {
+    dpkg-statoverride --list /var/run/<%= project_name %> >/dev/null || \
+        dpkg-statoverride --update --add <%= project_name %> <%= project_name %> 0755 /var/run/<%= project_name %>
+    dpkg-statoverride --list /etc/<%= project_name %> >/dev/null || \
+        dpkg-statoverride --update --add <%= project_name %> <%= project_name %> 0755 /etc/<%= project_name %>
+    dpkg-statoverride --list /var/log/<%= project_name %> >/dev/null || \
+        dpkg-statoverride --update --add <%= project_name %> <%= project_name %> 0755 /var/log/<%= project_name %>
+}
+
+update_conffile() {
+    CONFFILE="$1"
+    TMPL="$2"
+
+    if [ -e "$CONFFILE" ]; then
+        md5sum="`md5sum \"$CONFFILE\" | sed -e \"s/ .*//\"`"
+        old_md5sum="`sed -n -e \"/^Conffiles:/,/^[^ ]/{\\\\' $TMPL'{s/.* //;p}}\" /var/lib/dpkg/status`"
+        if [ -z "$old_md5sum" ]; then
+           # backward compatibility
+            old_md5sum="`sed -n -e \"/^Conffiles:/,/^[^ ]/{\\\\' $CONFFILE'{s/.* //;p}}\" /var/lib/dpkg/status`"
+        fi
+
+        if [ "$md5sum" != "$old_md5sum" ]; then
+            echo "Conffile $CONFFILE has been modified. Remain untouched."
+            # do nothing
+        else
+            echo "Updating conffile $CONFFILE ..."
+            cp -f "$TMPL" "$CONFFILE"
+        fi
+    else
+        echo "Installing default conffile $CONFFILE ..."
+        cp -f "$TMPL" "$CONFFILE"
+    fi
+
+    # Fluentd has a bug of loading plugin before
+    # changing to the right user. Then, these directories were created with
+    # root permission. The following lines fix that problem.
+    if [ -d "/var/log/<%= project_name %>/buffer/" ]; then
+        chown -R <%= project_name %>:<%= project_name %> /var/log/<%= project_name %>/buffer/
+    fi
+    if [ -d "/tmp/<%= project_name %>/" ]; then
+        chown -R <%= project_name %>:<%= project_name %> /tmp/<%= project_name %>/
+    fi
+}
+
+case "$1" in
+    configure)
+        add_system_user
+        add_directories
+        fixperms
+        update_conffile /etc/<%= project_name %>/fluent.conf ${<%= project_name_snake %>_dir}/etc/<%= project_name %>/fluent.conf.tmpl
+        ;;
+    abort-upgrade|abort-deconfigure|abort-remove)
+        :
+        ;;
+    *)
+        echo "Called with unknown argument $1, bailing out."
+        exit 1
+        ;;
+esac
+
+
+cp -f ${<%= project_name_snake %>_dir}/usr/sbin/<%= project_name %> /usr/sbin/<%= project_name %>
+chmod 755 /usr/sbin/<%= project_name %>
+
+if [ -d "/etc/logrotate.d/" ]; then
+  cp -f ${<%= project_name_snake %>_dir}/etc/<%= project_name %>/logrotate.d/<%= project_name %>.logrotate /etc/logrotate.d/<%= project_name %>
+fi
+
+if [ -d "/lib/systemd/system/" ]; then
+    cp -f ${<%= project_name_snake %>_dir}/etc/systemd/<%= project_name %>.service /lib/systemd/system/
+    chmod 644 /lib/systemd/system/<%= project_name %>.service
+fi
+
+<% if install_message %>
+if [ "$1" = "configure" ]; then
+  echo "<%= install_message %>"
+fi
+<% end %>
+
+# End automatically added section
+# Automatically added by dh_makeshlibs
+if [ "$1" = "configure" ]; then
+	ldconfig
+fi
+# End automatically added section

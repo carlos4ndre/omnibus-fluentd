@@ -1,0 +1,25 @@
+driver:
+  name: vagrant
+  forward_agent: yes
+  customize:
+    cpus: 2
+    memory: 2048
+  synced_folders:
+    - ['.', '/home/vagrant/fluentd']
+
+provisioner:
+  name: chef_zero
+
+platforms:
+  - name: debian-9
+    run_list: apt::default
+
+suites:
+  - name: default
+    run_list: omnibus::default
+    attributes:
+      omnibus:
+        build_user:          vagrant
+        build_user_group:    vagrant
+        build_user_password: vagrant
+        install_dir:         /opt/fluentd
